@@ -1,30 +1,27 @@
 
 %% Sequential Convex Programming (SCP) for 2D Minimum-Fuel STO
 
-function scp_min_fuel(x0,xf,planet_radius,mu,thrust_max) 
+function scp_min_fuel(x0,xf,planet_radius,mu_real,periods) 
     
-    N = 50;    % discretization points
+    N = 100;    % discretization points
+    mu=1; %variables are scaled so that mu and R == 1
     
-    
-    % Initial and final states: [x; y; vx; vy]
-%    x0 = [0; 1000; 1.8; -0.3];
-%    xf = [-300; -1000; -0.01;  0];
-    v0_hat = x0(3:4) / norm(x0(3:4));
-        
+    T0 = sqrt(planet_radius^3/mu_real);
+    Tdim = periods * 2 * pi * sqrt(sqrt(x0(1)^2 + x0(2)^2)^3 / mu_real);
+    x0(1:2) = x0(1:2) / planet_radius; 
+    xf(1:2) = xf(1:2) / planet_radius;
+
+    T = Tdim / T0;
+    a0 = planet_radius / T0^2;
+    v0 = planet_radius / T0;
+    x0(3:4) = x0(3:4) / v0; 
+    xf(3:4) = xf(3:4) / v0;
     % Maximum thrust
-    u_max = thrust_max;
-    
-    T = 2 * pi * sqrt(planet_radius^3 / mu);
-    
+    u_max = (5/a0);
+
     %% SCP Parameters
     max_iter = 15;
-    tolerance =  planet_radius * 0.01;
-    
-    %% Initial reference trajectory: linear interpolatin
-    %trag = trag_estimate ( atan(x0(1)/x0(2)),sqrt(x0(1)^2 + x0(2)^2),sqrt(xf(1)^2 + xf(2)^2),N,mu); %zeros(4,N);
-    %x_ref = trag(:,2:5).';
-    weights = exp(-5*(0:N-1)/(N-1));  % exponential decay
-    
+    tolerance = 0.03;
     
     x_ref = zeros(4,N); 
     for k = 1:N 
@@ -33,18 +30,13 @@ function scp_min_fuel(x0,xf,planet_radius,mu,thrust_max)
     end
     
     
-    R_planet = planet_radius;
+    R_planet = 1;
     dt = T/N;
-    
-    pairs = reshape(x_ref, 2, []);  % each column is a pair
-    
-    % take every 2nd pair
-    selected_pairs = pairs(:, 1:2:end);
-    diff = ( selected_pairs(:, 2:end) - selected_pairs(:, 1:end-1)) / dt;
+       
     
     %% Initial control guess: small random values
-    U_ref = repmat( (xf(3:4) - x0(3:4))/T, 50, 1); %[diff(:);[0;0]]; % x_ref(1:2:end)'% selected_pairs(:);% rand(2*N,1);%  (rand(2*N,1) - 0.5) * 1e-3;
-    %U_ref(1:2) = x0(3:4);
+    U_ref = zeros(2*N,1);
+    U_ref(1:2) = x0(3:4);
     
     
     %% SCP Iteration
@@ -56,16 +48,12 @@ function scp_min_fuel(x0,xf,planet_radius,mu,thrust_max)
     
            %% --- Objective: fuel + squared-smoothness + total-variation (TV) on vector diffs
         epsilon = 1e-6;
-        lambda_TV = 1;        % TV weight (promotes piecewise-constant thrusts => longer burns)
-        lambda_vel = 2;
+        lambda_TV = 0.1;        % TV weight (promotes piecewise-constant thrusts => longer burns)
+      
         fuel = 1;
         objective = @(U) ...        
             fuel* sum(sqrt(U(1:2:end).^2 + U(2:2:end).^2 + epsilon^2)) ...                   % fuel (approx l2)
-            + lambda_TV * sum(sqrt((U(1:2:end-2)-U(3:2:end)).^2 + (U(2:2:end-2)-U(4:2:end)).^2 + epsilon^2)) ...
-            + sum(lambda_vel * sum( ...
-            weights .* (1 - ((v0_hat(1)*U(1:2:end) + v0_hat(2)*U(2:2:end)) ...
-                             ./ sqrt(U(1:2:end).^2 + U(2:2:end).^2 + epsilon))).^2 ));
-    
+            + lambda_TV * sum(sqrt((U(1:2:end-2)-U(3:2:end)).^2 + (U(2:2:end-2)-U(4:2:end)).^2 + epsilon^2)); %...
     
         lb = -u_max*ones(2*N,1);
         ub = u_max*ones(2*N,1);
@@ -74,15 +62,16 @@ function scp_min_fuel(x0,xf,planet_radius,mu,thrust_max)
             'Display','iter', ...
             'Algorithm','sqp', ...
             'MaxFunctionEvaluations',1e6, ...
-            'StepTolerance', 1e-5, ...
-            'ConstraintTolerance', 1e-4);
+            'StepTolerance', 1e-6, ...
+            'ConstraintTolerance', 1e-6);
     
         [U_opt, ~] = fmincon(objective, U_ref, [], [], [], [], lb, ub, ...
             @(U) dynamics_constraints_SCP(U, x0, xf, N, A, B,d,R_planet), options);
     
-       % U_opt(abs(U_opt) < 0.001) = 0;
+        U_opt(abs(U_opt) < 0.001) = 0;
+
         % 3. Reconstruct trajectory
-       %    
+           
         x = x0;
         traj = zeros(4,N+1);
         traj(:,1) = x0;
@@ -96,25 +85,24 @@ function scp_min_fuel(x0,xf,planet_radius,mu,thrust_max)
         % 4. Check convergence
         final_error = max(abs(traj(:,end) - xf));
         fprintf('Iteration %d, final state error = %.6f\n', iter, final_error);
+
+        
+        %must recalculate dynamics because our path has changed
+        [A,B,d] = linearize_dynamics(traj(:,2:end),N,dt,mu); 
+        
+        x = x0;
+        traj = zeros(4,N);
+        for k = 1:N
+            uk = U_opt(2*k-1:2*k);
+            x = A(:,:,k)*x + B(:,:,k)*uk + d(:,k);
+            traj(:,k) = x;
+        end
+        
+        final_error = max(abs(traj(:,end) - xf));
+        fprintf('Iteration %d fter recalculating gravity, final state error = %.6f\n', iter, final_error);
         if final_error < tolerance
-            
-    
-            [A,B,d] = linearize_dynamics(traj(:,2:end),N,dt,mu); 
-            
-            x = x0;
-            traj = zeros(4,N);
-            for k = 1:N
-                uk = U_opt(2*k-1:2*k);
-                x = A(:,:,k)*x + B(:,:,k)*uk + d(:,k);
-                traj(:,k) = x;
-            end
-            
-            final_error = max(abs(traj(:,end) - xf));
-            fprintf('Iteration %d, final state error = %.6f\n', iter, final_error);
-            if final_error < tolerance
-                fprintf('Converged!\n');
-                break;
-            end
+            fprintf('Converged!\n');
+            break;
         end
     
         % 5. Update reference trajectory & control
@@ -137,10 +125,6 @@ function scp_min_fuel(x0,xf,planet_radius,mu,thrust_max)
             traj(:,k) = x(1:2);
           
         end
-        % Enforce initial state (already fixed by how we integrate) and final target
-        % Instead of storing x in history, we just need final equality and optionally per-step defects.
-        % To enforce dynamics exactly, better to stack defects between steps if x were an optimization variable.
-        % But because we only optimize U, we enforce final state equality:
         ceq = x - xf;
         
         pos = traj; 
