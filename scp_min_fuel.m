@@ -36,7 +36,8 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,periods)
     
     %% Initial control guess: small random values
     U_ref = zeros(2*N,1);
-    U_ref(1:2) = x0(3:4);
+    U_ref(1:2) = max(-u_max,min(u_max, x0(3:4)));
+    U_ref(3:4) = max(-u_max,min(u_max, x0(3:4)));
     
     
     %% SCP Iteration
@@ -57,11 +58,11 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,periods)
     
         lb = -u_max*ones(2*N,1);
         ub = u_max*ones(2*N,1);
-    
+        ternary = @(varargin) varargin{end - varargin{1}};
         options = optimoptions('fmincon', ...
             'Display','iter', ...
             'Algorithm','sqp', ...
-            'MaxFunctionEvaluations',1e6, ...
+            'MaxFunctionEvaluations',ternary(iter<5,1e4,1e5), ...
             'StepTolerance', 1e-6, ...
             'ConstraintTolerance', 1e-6);
     

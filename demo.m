@@ -13,7 +13,7 @@ xf = [-earth_r*2; -earth_r*3; -5.61e3;  0];
 
 %second part
 x0 = [-earth_r*2; -earth_r*3; -5.61e3;  0];
-xf = [earth_r*2; earth_r*3; 5.61e3;  0];
+xf = [earth_r*2; earth_r*3; 5.61e3;  -1e3];
 
 
 
