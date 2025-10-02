@@ -6,12 +6,10 @@ function plot_traj(traj,x0,xf,R_planet)
     plot(x0(1), x0(2),'go','MarkerSize',10,'MarkerFaceColor','g');
     plot(xf(1), xf(2),'ro','MarkerSize',10,'MarkerFaceColor','r');
     
-    % Sample every Mth point for arrows
-    M = 10;   % adjust density of arrows
     
     xlabel('X [m]');
     ylabel('Y [m]');
-    title('SCP Convexified 2D Trajectory with Gravity + Velocity Arrows');
+    title('SCP Convexified 2D Trajectory with Gravity');
     legend('Trajectory','Start','Target','Location','best');
 
     % Velocity arrow at final node
