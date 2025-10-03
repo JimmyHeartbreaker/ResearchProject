@@ -21,23 +21,89 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,periods)
 
     %% SCP Parameters
     max_iter = 15;
-    tolerance = 0.03;
+    tolerance = 0.01;
     
-    x_ref = zeros(4,N); 
-    for k = 1:N 
-        alpha = k/N; 
-        x_ref(:,k) = x0*(1-alpha) + xf*alpha; 
-    end
     
     
     R_planet = 1;
     dt = T/N;
-       
+   
+    r = norm(x0(1:2));   % distance from planet center
+    v_orb = sqrt(mu / r);  % scalar
+    v_current = norm(x0(3:4));
+    v_dir = x0(3:4) / v_current;  % unit vector along current velocity
+    delta_v = v_orb - v_current;
+    %U_mag = delta_v;              % approximate constant accel over transfer
+    %U_mag = max(min(U_mag, u_max), -u_max);  % clamp to bounds
+    %U_mat = repmat(U_mag * v_dir, 1, N);
+    %tau = 1;                        % decay factor (tune: 0.1-0.3 works well)
+    %weights = exp(-tau * (0:N-1)); 
+    U_mat = zeros(2,N);% U_mat .* weights;
+    U_mat(1:2) = delta_v * v_dir;
+        
+    % Straight line from x0 to xf
+    x_ref = zeros(4,N);
+    u = x0(1:2)';
+    v = xf(1:2)';
+    %theta = acos(dot(,) / (norm(x0(1:2)) * norm(xf(1:2)))); 
+    theta = atan2(det([v; u]), dot(v,u));
+    if theta < 0
+        theta = theta + 2*pi;
+    end
+
+    for k = 1:N
+        alpha = (k-1)/(N-1);
+        y = cos(theta * alpha) * r;
+        x = sin(theta * alpha) * r;
+        x_ref(1:2,k) = [x;y];
+    end
+
+    for k = 1:N-1
+        x_ref(3:4,k) = (x_ref(1:2,k+1) - x_ref(1:2,k)) / dt;
+    end
+    for k = 1:N
+        r = norm(x_ref(1:2,k));
+        v_orb = sqrt(mu / r);
+        dir = x_ref(3:4,k) / norm(x_ref(3:4,k));
+        x_ref(3:4,k) = dir * v_orb;  % set magnitude to local circular speed
+    end
+
+
+    % For the last node, just copy the previous velocity
+    x_ref(3:4,N) = x_ref(3:4,N-1);
+
+
+    figure; hold on; axis equal; grid on;
+
+% % Plot the planet
+% R_planet = 1;      % scaled radius
+%  theta = linspace(0,2*pi,100);
+%  fill(R_planet*cos(theta), R_planet*sin(theta), [0.5 0.5 1], 'FaceAlpha',0.3, 'EdgeColor','b');
+% % 
+% % % Plot the initial trajectory guess
+%  plot(x_ref(1,:), x_ref(2,:), 'k-o','LineWidth',2, 'MarkerSize',4);
+% % 
+% % % Plot start and target
+%  plot(x0(1), x0(2), 'go', 'MarkerSize',10,'MarkerFaceColor','g');
+%  plot(xf(1), xf(2), 'ro', 'MarkerSize',10,'MarkerFaceColor','r');
+% % 
+% % % Optionally, draw velocity arrows at every few nodes
+%  skip = 5;
+%  quiver(x_ref(1,1:skip:end), x_ref(2,1:skip:end), ...
+%         x_ref(3,1:skip:end), x_ref(4,1:skip:end), 0.5, 'r');
+% 
+%  xlabel('X [scaled]');
+%  ylabel('Y [scaled]');
+%  title('Initial Curved Trajectory Guess');
+%  legend('Planet','Trajectory','Start','Target','Velocity');
+
     
-    %% Initial control guess: small random values
-    U_ref = zeros(2*N,1);
-    U_ref(1:2) = max(-u_max,min(u_max, x0(3:4)));
-    U_ref(3:4) = max(-u_max,min(u_max, x0(3:4)));
+    % clip magnitude per node to u_max (scale columns that exceed)
+    mags = sqrt(sum(U_mat.^2,1));
+    scale = min(1, u_max ./ (mags + 1e-12));
+    U_mat = U_mat .* scale;
+    U_ref = reshape(U_mat, 2*N, 1);
+
     
     
     %% SCP Iteration
@@ -49,8 +115,8 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,periods)
     
            %% --- Objective: fuel + squared-smoothness + total-variation (TV) on vector diffs
         epsilon = 1e-6;
-        lambda_TV = 0.1;        % TV weight (promotes piecewise-constant thrusts => longer burns)
-      
+        lambda_TV = 0.05;        % TV weight (promotes piecewise-constant thrusts => longer burns)
+        
         fuel = 1;
         objective = @(U) ...        
             fuel* sum(sqrt(U(1:2:end).^2 + U(2:2:end).^2 + epsilon^2)) ...                   % fuel (approx l2)
@@ -62,14 +128,18 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,periods)
         options = optimoptions('fmincon', ...
             'Display','iter', ...
             'Algorithm','sqp', ...
-            'MaxFunctionEvaluations',ternary(iter<5,1e4,1e5), ...
-            'StepTolerance', 1e-6, ...
-            'ConstraintTolerance', 1e-6);
+            'MaxFunctionEvaluations',1e5, ...
+            'StepTolerance', 1e-7, ...
+            'ConstraintTolerance', 1e-4, ...
+            'OptimalityTolerance',1.5); 
+            % <- loosen this);
     
-        [U_opt, ~] = fmincon(objective, U_ref, [], [], [], [], lb, ub, ...
+        [U_opt, fval, exitflag, output, lambda] = fmincon(objective, U_ref, [], [], [], [], lb, ub, ...
             @(U) dynamics_constraints_SCP(U, x0, xf, N, A, B,d,R_planet), options);
     
-        U_opt(abs(U_opt) < 0.001) = 0;
+      %  [~, ceq_test] = dynamics_constraints_SCP(U_opt, x0, xf, N, A, B, d,R_planet);
+      %  max_ceq = max(abs(ceq_test));
+        %U_opt(abs(U_opt) < 0.001) = 0;
 
         % 3. Reconstruct trajectory
            
@@ -93,6 +163,7 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,periods)
         
         x = x0;
         traj = zeros(4,N);
+        U_opt(abs(U_opt) < 0.001) = 0;
         for k = 1:N
             uk = U_opt(2*k-1:2*k);
             x = A(:,:,k)*x + B(:,:,k)*uk + d(:,k);

@@ -8,7 +8,7 @@ x0 = [0; earth_r*2; 4.61e3; 0];
 xf = [-earth_r*2; -earth_r*3; -5.61e3;  0];
 
 
-  scp_min_fuel(x0,xf,earth_r,earth_mu,0.7);
+scp_min_fuel(x0,xf,earth_r,earth_mu,0.7);
 
 
 %second part
@@ -17,4 +17,4 @@ xf = [earth_r*2; earth_r*3; 5.61e3;  -1e3];
 
 
 
-  scp_min_fuel(x0,xf,earth_r,earth_mu,0.5);
+scp_min_fuel(x0,xf,earth_r,earth_mu,0.5);
