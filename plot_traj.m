@@ -1,4 +1,4 @@
-function plot_traj(traj,x0,xf,R_planet)
+function plot_traj(traj,U,x0,xf,R_planet)
     R_scale = 6378e3;
     R_planet = R_planet * R_scale
   %% Plot optimized trajectory with velocity arrows
@@ -13,11 +13,13 @@ function plot_traj(traj,x0,xf,R_planet)
     title('SCP Convexified 2D Trajectory with Gravity');
     legend('Trajectory','Start','Target','Location','best');
 
-    % Velocity arrow at final node
-    vx_f = traj(3,end);
-    vy_f = traj(4,end);
-    quiver(traj(1,end)*R_scale, traj(2,end)*R_scale, vx_f, vy_f, ...
-       0.5, 'r', 'LineWidth',2, 'MaxHeadSize',3); 
+
+    Ux = U(1:2:end);
+    Uy = U(2:2:end);
+    Ux = [Ux;0]';
+    Uy = [Uy;0]';
+    % draw arrows
+    quiver(traj(1,:)*R_scale, traj(2,:)*R_scale, R_scale*Ux, R_scale*Uy, 0, 'r', 'LineWidth', 1.5);
 
     planet_center = [0,0];  % assume at origin
     

@@ -169,7 +169,7 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,extra_periods,N)
     end
     
     plot_control(T,N,U_opt);
-    plot_traj(x_ref,x0,xf,R_planet);
+    plot_traj(x_ref,U_ref,x0,xf,R_planet);
     
  
 end
