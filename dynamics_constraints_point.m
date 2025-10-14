@@ -1,10 +1,4 @@
 function [c, ceq] = dynamics_constraints_point(U, x0, xf, N, A, B,d)
-        % persistent i
-        % if( isempty(i))
-        %     i= 0;
-        % end
-        % i = i + 1;
-        
         traj = zeros(2,N+1);  
         
         x = x0;   
@@ -15,12 +9,6 @@ function [c, ceq] = dynamics_constraints_point(U, x0, xf, N, A, B,d)
             x = A(:,:,k)*x + B(:,:,k)*U(:,k) + d(:,k);
             traj(:,k+1) = x(1:2);
         end
-
-   
-
-        % if mod(i,100000)==0
-        %     plot_debug(traj,x0,xf,1);
-        % end
         
         c= 1 - vecnorm(traj);
         

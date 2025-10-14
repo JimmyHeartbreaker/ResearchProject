@@ -17,7 +17,7 @@ function [A,B,d] = linearize_dynamics(x_ref,N,dt,mu)
     
         d(:,k) = [zeros(2,1); dt*(g_ref - G*pos)]; 
 
-   
+        
     end
-    d(:,100) =  d(:,99); 
+  %  d(:,N) =  d(:,N-1); 
 end
