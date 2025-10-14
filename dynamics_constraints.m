@@ -1,4 +1,4 @@
-function [c, ceq] = dynamics_constraints_point_variable_time(z, x0, xf, N, Gx,Gu,Gdt,d,dt_nom)
+function [c, ceq] = dynamics_constraints(z, x0, xf, N, Gx,Gu,d)
         nx = 4; 
         nu = 2;
         x = reshape(z(1:nx*(N-1)), nx, N-1);

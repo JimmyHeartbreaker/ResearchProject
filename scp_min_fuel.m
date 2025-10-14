@@ -73,9 +73,8 @@ function final_vector = scp_min_fuel(x0,xf,planet_radius,mu_real,extra_periods,N
     x_ref_flat = x_ref(:);
     z0 = [x_ref_flat(5:end-4); U_ref(:); dt_scale];
     
-    [f_i,Gx,Gu,Gdt,d] = linearize_dynamics_variable_time(x_ref,U_ref,N,dt_nom,mu);
+    [Gx,Gu,d] = linearize_dynamics(x_ref,U_ref,N,dt_nom,mu);
     max_iter = 50;
-    line_search=0;
     x_max = 10;
     lb = [];
     ub = [];
@@ -94,7 +93,9 @@ function final_vector = scp_min_fuel(x0,xf,planet_radius,mu_real,extra_periods,N
     % Time scale bounds
     lb = [lb; dt_min];
     ub = [ub; dt_max];
-reduce_jitter = 0;
+    rk4_mode = 0;
+    linearize_dynamics_fn = @linearize_dynamics;
+    forward_sim_fn = @forward_sim;
     %% SCP Iteration
     for iter = 1:max_iter         
     
@@ -102,16 +103,16 @@ reduce_jitter = 0;
     
       
                 jiter_control = abs(theta) *6;
-             obj = @(U) objective(U,z0,jiter_control,N,reduce_jitter);
+             obj = @(U) objective(U,z0,jiter_control,N,rk4_mode);
            options = optimoptions('fmincon', ...            
                'Display','iter', ...
             'Algorithm','sqp', ...
             'MaxFunctionEvaluations',2e5, ...  %            'FiniteDifferenceType','central', ...
              'StepTolerance',  1/(10^(min(8,iter+2))), ...    
-    'OptimalityTolerance', 1, ...
+    'OptimalityTolerance', 2, ...
     'ConstraintTolerance', 1/(10^(min(7,iter+1))));
             [U_opt, fval, exitflag, output, lambda] = fmincon(obj, z0, [], [], [], [], lb, ub, ...
-                @(U) dynamics_constraints_point_variable_time(U, x0, xf, N, Gx,Gu,Gdt,d,dt_nom), options);
+                @(U) dynamics_constraints(U, x0, xf, N, Gx,Gu,d), options);
      
        
         dt_range_scaler = sqrt(U_opt(end) / dt_scale);
@@ -130,22 +131,8 @@ reduce_jitter = 0;
         x= reshape( [x0;U_opt(1: 4*(N-1));xf], 4, N+1);
       
       
-        [f_i2,Gx3,Gu3,Gdt3,d3] = linearize_dynamics_variable_time(x,u,N,dt_nom,mu);
-        alpha = 1;
-        Gx = Gx * (1-alpha) + Gx3 * alpha;
-        d = d * (1-alpha) + d3 *alpha;
-        Gu = Gu * (1-alpha) + Gu3 * alpha;
-        Gdt = Gdt * (1-alpha) + Gdt3 * alpha;
-        x_sim = zeros(4,N+1);
-        x_sim(:,1) = x0;
-        dt_i = dt * dt_scale;
-        for k = 1:N
-            pos = x_sim(1:2,k);
-            r = max(norm(pos),1e-12);
-            acc = -mu*pos/r^3;          % gravity
-            f = [x_sim(3,k); x_sim(4,k); u(1,k)+acc(1); u(2,k)+acc(2)];
-            x_sim(:,k+1) = x_sim(:,k) + dt_i*f;  % forward Euler step
-        end
+        [Gx,Gu,d] = linearize_dynamics_fn(x,u,N,dt_nom,mu);
+        x_sim = forward_sim_fn(x0,u,dt_nom * dt_scale,N);
         x_ref_flat = x(:);
         z0 = [x_ref_flat(5:end-4); u(:); dt_scale];
         plot(x(1,:), x(2,:), 'o-',x_sim(1,:), x_sim(2,:), 'x-'); axis equal;
@@ -164,10 +151,15 @@ reduce_jitter = 0;
         c_perp =norm(perp);
         c_along = norm(a_proj_onto_b) -  norm(v);     
         vector_error =norm(v / norm(v)- xf(3:4)/ norm(xf(3:4)));
-        if norm(x_ref(:,N+1) - xf) < 0.1
-            reduce_jitter = 1;
-        else
-            reduce_jitter = 0;
+        if rk4_mode==0 && norm(x_ref(:,N+1) - xf) < 0.1
+            linearize_dynamics_fn = @linearize_dynamics_RK4;
+            forward_sim_fn = @forward_sim_RK4;
+            dt_nom = dt_nom * dt_scale;
+            dt_scale = 1;
+            ub(end) = 1;
+            lb(end) = 1;
+            rk4_mode = 1;
+            [Gx,Gu,d] = linearize_dynamics_fn(x,u,N,dt_nom,mu);
         end
         
         fprintf('Iteration %d, c_along = %.6f, c_perp = %.6f, vector_error = %.6f %.6f\n', iter, c_along,c_perp,vector_error);
