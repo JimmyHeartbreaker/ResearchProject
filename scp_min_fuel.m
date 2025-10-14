@@ -51,7 +51,7 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,extra_periods,N)
         theta0 = theta0 + pi;
     end
     for k = 1:(N+1)
-        alpha = (k-1)/(N+1);
+        alpha = (k-1)/(N);
         y = cos((theta ) * alpha+ theta0) * r;
         x = sin((theta) * alpha + theta0) * r;
         x_ref(1:2,k) = [x;y];
@@ -169,7 +169,7 @@ function scp_min_fuel(x0,xf,planet_radius,mu_real,extra_periods,N)
     end
     
     plot_control(T,N,U_opt);
-    plot_traj(x_ref,U_ref,x0,xf,R_planet);
+    plot_traj(x_ref,U_opt,x0,xf,R_planet);
     
  
 end

@@ -19,5 +19,4 @@ function [A,B,d] = linearize_dynamics(x_ref,N,dt,mu)
 
    
     end
-    d(:,100) =  d(:,99); 
 end
