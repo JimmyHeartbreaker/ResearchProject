@@ -18,15 +18,15 @@ earth_mu = 3.986004418e14;
 % %   xf = [-earth_r*3; -earth_r*3; 0;-5e3];
 % %   scp_min_fuel(x0,xf,earth_r,earth_mu,0,100);
 % 
-% %test 1/2 orbit
-% x0 = [0; earth_r*2; 5e3; 0];
-% xf = [0; -earth_r*2; -5e3; 0];
+% % %test 1/2 orbit
+% x0 = [0; earth_r*2; 5.59e3; 0];
+% xf = [-earth_r*2; 0; 0;5.59e3];
 % scp_min_fuel(x0,xf,earth_r,earth_mu,0,100);
 % 
 % %test 1/2 orbit far
-x0 = [0; earth_r*2; 5e3; 0];
-xf = [0; -earth_r*6; -5e3; 0];
-scp_min_fuel(x0,xf,earth_r,earth_mu,0,100);
+% x0 = [0; earth_r*2; 5e3; 0];
+% xf = [0; -earth_r*6; -5e3; 0];
+% scp_min_fuel(x0,xf,earth_r,earth_mu,0,100);
 % 
 % 
 % %test 3/4 orbit
@@ -36,9 +36,9 @@ scp_min_fuel(x0,xf,earth_r,earth_mu,0,100);
 
 
 %test 1 orbit
-% x0 = [0; earth_r*2; 5.58e3; 0];
-% xf = [0; earth_r*5; 3.952e3; 0];
-% scp_min_fuel(x0,xf,earth_r,earth_mu,1,100);
+x0 = [0; earth_r*2; 5.58e3; 0];
+xf = [0; earth_r*5; 3.952e3; 0];
+scp_min_fuel(x0,xf,earth_r,earth_mu,1,100);
 
 
 

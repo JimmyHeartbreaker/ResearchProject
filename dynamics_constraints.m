@@ -27,7 +27,7 @@ ceq(:,N) = xf - (Gx_eff(:,:,N)*x(:,N-1) + Gu_u_plus_d(:,N));
 
      
         ceq = ceq(:);
-        c= [];%1 - vecnorm(traj);
+        c= 1 - vecnorm(x(1:2,:));
         
 end
 
